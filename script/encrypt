@@ -1,0 +1,4 @@
+#!/bin/sh
+IN_FILE=$1
+OUT_FILE=$2
+openssl smime -encrypt -binary -aes256 -in "$IN_FILE" -out "$OUT_FILE" -outform DER backup.crt
