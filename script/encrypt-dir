@@ -1,5 +1,0 @@
-#!/bin/sh
-IN_DIR_PATH=$(dirname "$1")
-IN_DIR_NAME=$(basename "$1")
-OUT_FILE=$2
-tar vc -C "$IN_DIR_PATH" --xz -- "$IN_DIR_NAME" | openssl smime -encrypt -binary -aes256 -out "$OUT_FILE" -outform DER backup.crt

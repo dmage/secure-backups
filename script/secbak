@@ -1,0 +1,126 @@
+#!/bin/bash
+set -fu
+
+program_name=$0
+action=$1; shift
+
+#
+# Helpers
+#
+
+quote() {
+    printf "%q" "$1"
+    shift
+    printf " %q" "$@"
+}
+
+# remote ls "/foo bar/baz"
+remote() {
+    ssh "$SECURE_BACKUPS_SSH" -- "$(quote "$@")"
+}
+
+#
+# Auxiliary functions
+#
+
+pack-dir() {
+    local in_dir=$1
+    tar vc -C "$in_dir" --xz .
+}
+
+unpack-dir() {
+    local out_dir=$1
+    mkdir -p "$out_dir"
+    tar vx -C "$out_dir" --xz
+}
+
+encrypt() {
+    openssl smime -encrypt -binary -aes256 -outform DER "$SECURE_BACKUPS_CRT"
+}
+
+decrypt() {
+    openssl smime -decrypt -binary -inform DER -inkey "$SECURE_BACKUPS_KEY"
+}
+
+upload-file() {
+    local subpath=$1
+    remote bash -c '
+    F="$1"
+    T="$(mktemp "${TMPDIR:-/tmp}/secure-backups.XXXXXXXX")"
+    on_exit() { if [ -e "$T" ]; then rm "$T"; fi; }
+    trap on_exit EXIT
+
+    cat >"$T"
+
+    if [ -s "$T" ]
+        mkdir -p "$(dirname "$F")"
+        then mv "$T" "$F"
+    else
+        echo "Failed to save file \"$F\"" >&2
+    fi' arg0 "$SECURE_BACKUPS_REMOTE_PATH/$subpath"
+}
+
+download-file() {
+    local subpath=$1
+    remote cat "$SECURE_BACKUPS_REMOTE_PATH/$subpath"
+}
+
+#
+# Commands
+#
+
+secbak-help() {
+    cat <<END
+usage: secbak <command> [<args>]
+
+Available commands:
+    help
+    tree
+    backup
+    recover
+END
+}
+
+secbak-tree() {
+    remote tree "$SECURE_BACKUPS_REMOTE_PATH" "$@"
+}
+
+secbak-backup() {
+    local in_path=$1
+    local backup_name=$2
+
+    if [ -f "$in_path" ]; then
+        cat "$in_path" | encrypt | upload-file "file/$backup_name"
+    elif [ -d "$in_path" ]; then
+        pack-dir "$in_path" | encrypt | upload-file "dir/$backup_name"
+    else
+        echo "$program_name: $in_path: unknown file type" >&2
+        exit 1
+    fi
+}
+
+secbak-recover() {
+    local backup_type=$1
+    local backup_name=$2
+    local out_path=$3
+
+    if [[ $backup_type == "file" ]]; then
+        download-file "$backup_type/$backup_name" | decrypt >"$out_path"
+    elif [[ $backup_type == "dir" ]]; then
+        download-file "$backup_type/$backup_name" | decrypt | unpack-dir "$out_path"
+    else
+        echo "$program_name: $backup_type: unknown backup type" >&2
+    fi
+}
+
+#
+# Main
+#
+
+if declare -F "secbak-$action" >/dev/null; then
+    "secbak-$action" "$@"
+else
+    echo "secbak: $action is not a secbak command. See 'secbak --help'." >&2
+    exit 1
+fi
+exit

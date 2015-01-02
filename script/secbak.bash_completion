@@ -1,0 +1,46 @@
+# secbak completion for sudo(8)                            -*- shell-script -*-
+
+_secbak()
+{
+    local cur prev words cword
+    _init_completion || return
+
+    local i action action_offset
+
+    for (( i=1; i <= COMP_CWORD; i++ )); do
+        if [[ ${COMP_WORDS[i]} != -* ]]; then
+            if [[ $i == $COMP_CWORD ]]; then
+                COMPREPLY=( $( compgen -W 'backup help recover tree' --
+                    "$cur") )
+                return
+            fi
+            action_offset=$i
+            action=${COMP_WORDS[i]}
+            break
+        fi
+        # [[ ${COMP_WORDS[i]} == -@(u|g|p) ]] && ((i++))
+    done
+
+    #case "$prev" in
+    #    -u)
+    #        COMPREPLY=( $( compgen -u -- "$cur" ) )
+    #        return
+    #        ;;
+    #    -g)
+    #        COMPREPLY=( $( compgen -g -- "$cur" ) )
+    #        return
+    #        ;;
+    #    -p)
+    #        # argument required but no completions available
+    #        return
+    #       ;;
+    #esac
+
+    #if [[ "$cur" == -* ]]; then
+    #    COMPREPLY=( $( compgen -W '-a b c u g p' -- "$cur" ) )
+    #    return
+    #fi
+    _filedir
+} && complete -F _secbak secbak
+
+# ex: ts=4 sw=4 et filetype=sh
